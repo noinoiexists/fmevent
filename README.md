@@ -365,14 +365,7 @@ fmevent: input is empty; nothing to classify
 ```
 
 `ls` wrote its complaint to stderr, which bypasses the pipe entirely, so `fmevent`
-received an empty stream and answered a question about nothing. Redirect it:
-
-```sh
-$ ls dsd 2>&1 | fmevent "command failed"
-```
-
-Use `2>&1`, or `|&` in zsh and bash, any time the thing you want to classify *is* an
-error message. This is the most common way to get a confusing result out of `fmevent`.
+received an empty stream and answered a question about nothing. Redirect it with `2>&1`.
 
 - **Pass `--greedy` when the answer has to be reproducible.** The model is not deterministic.
 
