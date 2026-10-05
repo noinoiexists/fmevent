@@ -126,8 +126,15 @@ The confidence number is also a **self-report, not a calibrated probability**, a
 
 ## Install
 
-Requires macOS 27+ with Apple Intelligence enabled, plus `jq` (which ships at
-`/usr/bin/jq`).
+Requires macOS 27+ with Apple Intelligence enabled.
+
+### Option 1: Homebrew
+
+```sh
+brew install noinoiexists/tools/fmevent
+```
+
+### Option 2: From GitHub:
 
 ```sh
 git clone https://github.com/noinoiexists/fmevent.git && cd fmevent
