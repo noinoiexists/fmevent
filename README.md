@@ -68,7 +68,7 @@ into an extractor that fills in a JSON shape you supply. Any of the three can re
 with `--json`, so a program downstream can read the model's answer rather than only act
 on its exit status.
 
-No API key, no account, no network, no cost. The model runs on your Mac: `fmevent`
+The model runs on your Mac locally: `fmevent`
 drives the `fm` command that ships with macOS 27, so the logs, diffs and source you
 point it at never leave the machine.
 
@@ -89,9 +89,6 @@ to do about it.
 That is the difference between a primitive you can compose into a workflow and a
 process you have to supervise.
 
-Predicate mode is the whole idea in one line. `--route` scales it into a semantic
-router that dispatches to the right handler. `--schema` turns it into an extractor
-that hands you structured JSON. All three are the same primitive in different clothes.
 
 ---
 
@@ -99,7 +96,7 @@ that hands you structured JSON. All three are the same primitive in different cl
 
 **`fmevent` is not a security boundary.**
 
-This is measured, not hedged. Given input containing
+Given input containing
 
 ```
 ERROR: compilation failed with 3 errors
@@ -133,13 +130,13 @@ Requires macOS 27+ with Apple Intelligence enabled, plus `jq` (which ships at
 `/usr/bin/jq`).
 
 ```sh
-git clone <this repo> && cd fmevent
-sudo cp bin/fmevent /usr/local/bin/
-fmevent doctor
+git clone https://github.com/noinoiexists/fmevent.git && cd fmevent
+./bin/fmevent doctor
 ```
 
 `bin/fmevent` is a single self-contained script with no `source`d parts and no
 dependencies beyond `sh`, `jq`, and `fm`.
+You may `cp` it into a directory in `PATH`.
 
 ## Check your setup
 
@@ -212,14 +209,14 @@ An `fm` failure is always `2`, never a silent `1`.
 
 ## Recipes
 
-**Sort a log by what went wrong.** The model is good at this; `grep` is not, because
+- **Sort a log by what went wrong.** The model is good at this; `grep` is not, because
 ten different tools say "failed" ten different ways.
 
 ```sh
 cat ci.log | fmevent --json "this indicates a flaky infrastructure failure" | jq .matched
 ```
 
-**Gate a deploy on a diff.**
+- **Gate a deploy on a diff.**
 
 ```sh
 if git diff --cached | fmevent "this changes authentication or cryptographic behaviour"; then
@@ -227,15 +224,15 @@ if git diff --cached | fmevent "this changes authentication or cryptographic beh
 fi
 ```
 
-**Route a failure to the right handler.** See [Routes](#routes).
+- **Route a failure to the right handler.** See [Routes](#routes).
 
-**Triage a directory.**
+- **Triage a directory.**
 
 ```sh
-find ./inbox -type f | fmevent "these are screenshots or images"
+find ./inbox -type f | fmevent "these are screenshots"
 ```
 
-**Pull structured data out of a diff.** `--schema` turns `fmevent` from a yes/no
+- **Pull structured data out of a diff.** `--schema` turns `fmevent` from a yes/no
 question into an extractor: you supply the shape, and it prints the model's JSON on
 stdout for `jq` to consume. The dialect is JSON Schema plus Apple's `x-order`
 extension; `examples/schema/change.json` is a working one.
@@ -256,7 +253,7 @@ JSON came back and `2` when it did not. Order the properties with `x-order` so t
 descriptive fields come before the judgement ones. The model commits to what it has
 already written, so a verdict that precedes its reasoning is a worse verdict.
 
-**Read a huge log without blowing the context window.** The on-device model has a
+- **Read a huge log without blowing the context window.** The on-device model has a
 small context (4 to 8K tokens, shared with the instructions *and* the schema), so budget
 your input:
 
@@ -359,7 +356,7 @@ instructions the model will happily report `0.9` for a wrong answer. See below.
 
 ## Important Notes
 
-**Errors go to stderr, and stderr does not go through a pipe.** This looks like it
+- **Errors go to stderr, and stderr does not go through a pipe.** This looks like it
 should work, and silently does nothing:
 
 ```sh
@@ -377,7 +374,7 @@ $ ls dsd 2>&1 | fmevent "command failed"
 Use `2>&1`, or `|&` in zsh and bash, any time the thing you want to classify *is* an
 error message. This is the most common way to get a confusing result out of `fmevent`.
 
-**Pass `--greedy` when the answer has to be reproducible.** The model is not deterministic.
+- **Pass `--greedy` when the answer has to be reproducible.** The model is not deterministic.
 
 ```sh
 cat build.log | fmevent --greedy "this is a compiler error"
@@ -386,7 +383,7 @@ cat build.log | fmevent --greedy "this is a compiler error"
 Use it in CI, in tests, and anywhere a flip-flopping answer is worse than a slow one.
 An answer that changes between runs is not a decision you can build automation on.
 
-**It reads stdin only when you give it no positional prompt**:
+- **It reads stdin only when you give it no positional prompt**:
 
 ```sh
 $ echo "The magic word is BANANA." | fm respond -i "Reply with the magic word" "What is it?"
@@ -397,26 +394,26 @@ NO-INPUT-SEEN          # exit 0. The piped text was silently discarded.
 task lives entirely in `--instructions`. This also keeps log and diff content out of
 the process table.
 
-**It is agreeable.** Asked whether `hello world, everything is fine` reports a
+- **It is agreeable.** Asked whether `hello world, everything is fine` reports a
 successful build, it said `true` at confidence 0.9. The wording *"answer true only if
 the input explicitly states … absence of information is never success"* fixes it,
 returning `false` at confidence 0.0. That sentence is load-bearing.
 
-**It under-reports multi-label answers** unless you say *"evaluate EACH route
+- **It under-reports multi-label answers** unless you say *"evaluate EACH route
 independently … do not stop at the first match."* With that line, recall on a genuine
 two-route input went from 1/2 to 2/2.
 
-**Its schema dialect has no `enum`.** `{"enum": [...]}` is rejected outright. Route
+- **Its schema dialect has no `enum`.** `{"enum": [...]}` is rejected outright. Route
 names are plain strings, validated by `fmevent` afterwards. `--schema` also accepts
 inline JSON, so no schema file is written to disk.
 
-**It takes payload-embedded instructions seriously**, as described at the top.
+- **It takes payload-embedded instructions seriously**, as described at the top.
 
-**Guardrails were a non-issue** for the intended use: an auth/crypto diff classified
+- **Guardrails were a non-issue** for the intended use: an auth/crypto diff classified
 correctly at the default guardrail level. `--guardrails` is exposed as an escape hatch,
 not a requirement.
 
-**Latency varies a lot.** A single call took about 1.3s against an idle model, but
+- **Latency varies a lot.** A single call took about 1.3s against an idle model, but
 rapid back-to-back invocations in a loop were far slower, sometimes tens of seconds
 each. Budget for it: `fmevent` is for triage, not for a hot loop over thousands of
 items, and the `--timeout` default of 120s is there so a stalled call cannot wedge a
@@ -496,5 +493,5 @@ hash, and an `fm serve` socket transport to avoid a process spawn per call.
 
 Released under the MIT Licence. See [LICENSE](LICENSE) for the full text.
 
-`fmevent` is an independent project. It is not affiliated with, endorsed by, or
+`fmevent` is an independent project by Nithik R. It is not affiliated with, endorsed by, or
 sponsored by Apple. Apple, macOS, and Apple Intelligence are trademarks of Apple Inc.
