@@ -1,0 +1,48 @@
+{
+  "settings": { "min_confidence": 0.0 },
+
+  "route": [
+    {
+      "name": "dependency-security",
+      "when": "the failure is caused by a dependency problem that also involves a security vulnerability",
+      "all_of": ["dependency", "security"],
+      "priority": 100,
+      "run": ["./handle-dependency-security.sh"]
+    },
+    {
+      "name": "security",
+      "when": "a security vulnerability, CVE, credential, or cryptographic behaviour is involved",
+      "priority": 50,
+      "run": ["./handle-security.sh"]
+    },
+    {
+      "name": "dependency",
+      "when": "the failure is caused by an unresolved, missing, or conflicting dependency",
+      "priority": 20,
+      "run": ["./handle-dependency.sh"]
+    },
+    {
+      "name": "test",
+      "when": "one or more tests failed because of program behaviour",
+      "priority": 20,
+      "run": ["./handle-test.sh"]
+    },
+    {
+      "name": "environment",
+      "when": "the failure is caused by the environment, configuration, or a missing tool",
+      "priority": 10,
+      "run": ["./handle-environment.sh"]
+    },
+    {
+      "name": "success",
+      "when": "the command completed successfully with no errors",
+      "priority": 0,
+      "run": ["./handle-success.sh"]
+    }
+  ],
+
+  "fallback": {
+    "name": "unknown",
+    "run": ["./handle-unknown.sh"]
+  }
+}

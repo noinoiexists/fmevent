@@ -1,0 +1,332 @@
+.\" fmevent(1)
+.Dd October 5, 2026
+.Dt FMEVENT 1
+.Os macOS 27
+.Sh NAME
+.Nm fmevent
+.Nd a semantic if command line tool for macOS
+.Sh SYNOPSIS
+.Nm
+.Op options
+.Ar condition
+.Nm
+.Op options
+.Ar condition
+.Ar file ...
+.Nm
+.Fl -route
+.Ar routes.json
+.Op options
+.Nm
+.Fl -schema
+.Ar schema.json
+.Ar instruction
+.Nm
+.Cm doctor
+.Sh DESCRIPTION
+.Nm
+is a semantic
+.Dq if
+command line tool for macOS.
+It turns a plain-English question about stdin into an exit status, so shells
+branch on meaning rather than on text.
+It runs Apple's on-device model.
+Nothing leaves your Mac, and the model only ever classifies.
+You decide what happens next.
+.Pp
+.Nm
+evaluates a natural-language condition against its input using Apple's on-device
+Foundation Model, by way of the
+.Xr fm 1
+command shipped with macOS 27, and reports the answer as an exit status.
+.Pp
+The model is asked one question: what does this input mean.
+Every decision about what happens next \(em which route runs, what the status is \(em
+is made by
+.Nm
+itself, deterministically.
+.Nm
+is not an agent, and never asks the model to produce a command.
+.Pp
+Input is read from standard input, or from the
+.Ar file
+operands.
+.Sh NOTES
+Two mistakes account for most surprising results.
+.Pp
+Error messages are written to standard error, which does not pass through a
+pipe, so
+.Nm
+classifies an empty stream and says so:
+.Bd -literal -offset indent
+$ ls dsd | fmevent "command failed"
+fmevent: input is empty; nothing to classify
+.Ed
+.Pp
+Redirect it when the thing to be classified is an error message:
+.Bd -literal -offset indent
+$ ls dsd 2>&1 | fmevent "command failed"
+.Ed
+.Pp
+Second, the model is not deterministic: identical input and condition can yield
+different answers across invocations.
+Pass
+.Fl -greedy
+whenever the answer must be reproducible, in particular in CI and in tests.
+An answer that changes between runs is not one automation can be built on.
+.Sh EXIT STATUS
+.Bl -tag -width indent
+.It 0
+The condition is satisfied, or a route matched.
+.It 1
+The condition is not satisfied, or no route matched.
+.It 2
+.Nm
+itself failed.
+.El
+.Pp
+A failure of
+.Xr fm 1
+is always 2, never 1, so that a broken tool cannot be mistaken for a
+negative answer.
+.Sh OPTIONS
+.Bl -tag -width indent
+.It Fl -route Ar file
+Read routes from
+.Ar file
+and dispatch to the matching one.
+See
+.Sx ROUTES .
+.It Fl -schema Ar file
+Structured extraction rather than a yes/no decision.
+The model's JSON is written to standard output unchanged.
+.Ar instruction
+describes what to extract.
+.It Fl -json
+Write a machine-readable result to standard output.
+.It Fl -explain
+Print the model's reasoning.
+Informational only; it must never be treated as authoritative by a program.
+.It Fl -min-confidence Ar n
+Require the model's self-reported confidence to be at least
+.Ar n .
+Defaults to 0; see
+.Sx CONFIDENCE .
+.It Fl -strict
+Refuse, with status 2, when the input looks like a prompt injection attempt,
+and require the evidence the model quotes to appear in the input.
+Fails closed.
+Not valid together with
+.Fl -on-error
+values other than
+.Cm fail .
+.It Fl -dry-run
+In route mode, print the decision and execute nothing.
+.It Fl -max-input Ar bytes
+Budget for the payload.
+Defaults to 12288.
+Input beyond it is elided in the middle so that the head and tail survive,
+and a warning is printed.
+.It Fl -head Ar n
+Keep only the first
+.Ar n
+lines.
+.It Fl -tail Ar n
+Keep only the last
+.Ar n
+lines.
+.It Fl -timeout Ar seconds
+Abandon the model after this long.
+Defaults to 120.
+macOS has no
+.Xr timeout 1 ,
+so this is implemented with a watchdog.
+.It Fl -on-error Ar mode
+What to do when the model fails:
+.Cm fail
+(exit 2, the default),
+.Cm true ,
+or
+.Cm false .
+.It Fl -greedy
+Use greedy sampling.
+The model is otherwise not deterministic; use this in CI and in tests, where
+the same input must produce the same answer.
+.It Fl -use-case Ar case
+.Cm general
+or
+.Cm content-tagging .
+.It Fl -guardrails Ar level
+.Cm default
+or
+.Cm permissive-content-transformations .
+.It Fl q , -quiet
+Suppress diagnostics on standard error.
+.It Fl h , -help
+Print usage.
+.It Fl V , -version
+Print the version.
+.El
+.Sh ROUTES
+A routes file is JSON:
+.Bd -literal -offset indent
+{
+  "settings": { "min_confidence": 0.0 },
+  "route": [
+    { "name": "security",
+      "when": "a security vulnerability or credential is involved",
+      "priority": 50,
+      "run": ["./handle-security.sh"] },
+    { "name": "dependency",
+      "when": "an unresolved or conflicting dependency",
+      "priority": 20,
+      "run": ["./handle-dependency.sh"] },
+    { "name": "dependency-security",
+      "when": "a dependency problem involving a security vulnerability",
+      "all_of": ["dependency", "security"],
+      "priority": 100,
+      "run": ["./handle-dependency-security.sh"] }
+  ],
+  "fallback": { "name": "unknown", "run": ["./handle-unknown.sh"] }
+}
+.Ed
+.Pp
+The model reports every route whose
+.Va when
+condition the input satisfies.
+Names it invents are discarded.
+The survivors are ranked by
+.Va priority ,
+highest first, ties going to the earlier declaration, and the winner's
+.Va run
+array is executed directly, without a shell, so nothing in the configuration
+can inject a command.
+A leading
+.Pa ./
+or
+.Pa ../
+is resolved against the directory holding the routes file, so the file is
+self-contained and may be invoked from any working directory; anything else is
+looked up on
+.Ev PATH
+as usual.
+.Pp
+.Va all_of
+composes routes deterministically.
+A model recognises the parts of a compound situation but reliably declines to
+report the whole, so a composite route is derived by the engine whenever all of
+the named routes matched, rather than being asked of the model.
+.Pp
+In route mode the exit status is that of the executed action; 1 if nothing
+matched and no
+.Va fallback
+was declared; 2 if
+.Nm
+failed.
+.Sh CONFIDENCE
+The default threshold is 0 on purpose.
+The number the model reports is a self-reported guess with no calibration behind
+it, so gating on it by default would produce unpredictable false negatives.
+The match/no-match judgement and route abstention carry the decision instead.
+Both
+.Fl -json
+and
+.Fl -explain
+always surface the number so that a threshold can be chosen against real data.
+.Sh SECURITY
+.Nm
+is not a security boundary.
+Text supplied as input can persuade the model to the wrong answer; this was
+measured, and neither anti-injection instructions nor delimiter framing of the
+payload prevented it.
+.Nm
+scans input for instruction-like patterns and warns, and
+.Fl -strict
+turns that into a refusal, but anyone who controls the classified text can
+influence the result.
+Use
+.Nm
+to sort, triage, label, and route, not to authorise.
+.Sh ENVIRONMENT
+.Bl -tag -width indent
+.It Ev FMEVENT_FM
+Path to the
+.Xr fm 1
+binary.
+Defaults to /usr/bin/fm.
+.It Ev FMEVENT_JQ
+Path to the
+.Xr jq 1
+binary.
+Defaults to /usr/bin/jq.
+.El
+.Sh FILES
+.Bl -tag -width indent
+.It Pa ~/.fm/
+.Xr fm 1
+sessions and configuration.
+.El
+.Sh EXAMPLES
+Decide whether a log shows a dependency failure:
+.Bd -literal -offset indent
+cat output.log | fmevent "this is a dependency resolution failure"
+.Ed
+.Pp
+Gate a deploy on a security-sensitive diff:
+.Bd -literal -offset indent
+git diff | fmevent "this changes authentication or cryptographic behaviour"
+.Ed
+.Pp
+Route a failing test run without executing anything:
+.Bd -literal -offset indent
+pytest 2>&1 | fmevent --route routes.json --dry-run
+.Ed
+.Pp
+Read only the tail of a large log:
+.Bd -literal -offset indent
+docker logs api | fmevent --tail 500 "this indicates a database failure"
+.Ed
+.Pp
+Extract structured data from a diff, giving the model the shape to fill in:
+.Bd -literal -offset indent
+git diff | fmevent --schema examples/schema/change.json \e
+    "analyse whether this changes security-sensitive behaviour" | jq .
+.Ed
+.Pp
+which prints, for example:
+.Bd -literal -offset indent
+{
+  "summary": "The code checks if the password matches the stored
+              password using a constant-time comparison.",
+  "severity": "low",
+  "category": "authentication",
+  "security_sensitive": true
+}
+.Ed
+.Pp
+There is no true/false in this mode, so it is not a predicate: the exit status
+is 0 when valid JSON was produced and 2 when it was not.
+.Sh SEE ALSO
+.Xr fm 1 ,
+.Xr jq 1 ,
+.Xr test 1 ,
+.Xr grep 1
+.Pp
+Full documentation, worked examples and the source:
+.Bd -literal -offset indent
+https://github.com/noinoiexists/fmevent
+.Ed
+.Sh AUTHOR
+.An Nithik R. <https://github.com/noinoiexists/>
+.Sh BUGS
+The confidence value is a self-report and not a calibrated probability.
+The model's evidence text is informational and must not be treated as
+authoritative by a program.
+.Pp
+The model is not reliably deterministic: identical input and condition can
+yield different answers across invocations.
+.Fl -greedy
+removes the sampling randomness and makes repeated runs agree.
+.Pp
+The model may be persuaded by text inside the input itself, as described under
+.Sx SECURITY .

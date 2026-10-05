@@ -1,0 +1,59 @@
+#!/bin/sh
+#
+# A stand-in for /usr/bin/fm, for tests that must not depend on the model.
+#
+# It reads stdin exactly the way fm does, so the plumbing under test is real;
+# only the answer is synthetic. Behaviour is driven by FAKE_FM_MODE:
+#
+#   ok           (default) emit FAKE_FM_* as a verdict or routing object
+#   malformed    emit prose instead of JSON
+#   nofields     emit JSON that is missing the required fields
+#   license      exit 69, as fm does when the licence has not been agreed
+#   unavailable  exit 1 with the modelNotReady message
+#   empty        exit 0 having printed nothing
+#   hang         never answer, to exercise the watchdog
+#
+# For route mode set FAKE_FM_MODE=ok and FAKE_FM_MATCHES to a raw JSON array
+# body, e.g. FAKE_FM_MATCHES='"dependency","nonsense"'.
+
+cat >/dev/null 2>&1
+
+mode=${FAKE_FM_MODE:-ok}
+
+case "$mode" in
+    license)
+        printf 'You have not agreed to these terms. Exiting.\n' >&2
+        exit 69
+        ;;
+    unavailable)
+        printf 'Error: The model is not available. Try again later.\n' >&2
+        exit 1
+        ;;
+    malformed)
+        printf 'Sure! Based on the text, the answer is yes.\n'
+        exit 0
+        ;;
+    nofields)
+        printf '{"something":"else"}\n'
+        exit 0
+        ;;
+    empty)
+        exit 0
+        ;;
+    hang)
+        sleep 60
+        exit 0
+        ;;
+esac
+
+evidence=${FAKE_FM_EVIDENCE:-a fake quotation}
+confidence=${FAKE_FM_CONFIDENCE:-0.9}
+
+if [ -n "${FAKE_FM_MATCHES:-}" ]; then
+    printf '{"evidence":"%s","matches":[%s],"confidence":%s}\n' \
+        "$evidence" "$FAKE_FM_MATCHES" "$confidence"
+else
+    printf '{"evidence":"%s","matched":%s,"confidence":%s}\n' \
+        "$evidence" "${FAKE_FM_MATCHED:-true}" "$confidence"
+fi
+exit 0

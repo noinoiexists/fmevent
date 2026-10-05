@@ -1,0 +1,22 @@
+{
+  "title": "Findings",
+  "type": "object",
+  "additionalProperties": false,
+  "x-order": ["summary", "findings", "blocking"],
+  "required": ["summary", "findings", "blocking"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "One sentence describing the overall state of the input."
+    },
+    "findings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Every distinct problem the input reports, one short sentence each. Empty if there are none."
+    },
+    "blocking": {
+      "type": "boolean",
+      "description": "True only if at least one finding would block a release."
+    }
+  }
+}

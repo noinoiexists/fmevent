@@ -1,0 +1,25 @@
+{
+  "title": "Change",
+  "type": "object",
+  "additionalProperties": false,
+  "x-order": ["summary", "security_sensitive", "category", "severity"],
+  "required": ["summary", "security_sensitive", "category", "severity"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "One sentence describing what the change does."
+    },
+    "security_sensitive": {
+      "type": "boolean",
+      "description": "True only if the change affects authentication, authorisation, or cryptography."
+    },
+    "category": {
+      "type": "string",
+      "description": "One of: cryptography, authentication, networking, storage, ui, build, other."
+    },
+    "severity": {
+      "type": "string",
+      "description": "One of: low, medium, high."
+    }
+  }
+}
