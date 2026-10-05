@@ -16,7 +16,7 @@
 # For route mode set FAKE_FM_MODE=ok and FAKE_FM_MATCHES to a raw JSON array
 # body, e.g. FAKE_FM_MATCHES='"dependency","nonsense"'.
 
-cat >/dev/null 2>&1
+payload=$(cat 2>/dev/null)
 
 mode=${FAKE_FM_MODE:-ok}
 
@@ -38,6 +38,20 @@ case "$mode" in
         exit 0
         ;;
     empty)
+        exit 0
+        ;;
+    ctrljson)
+        # Right shape, illegal JSON: a raw BEL and a literal newline inside a
+        # string. Constrained decoding can produce this when it quotes a control
+        # character out of the input, and fmevent repairs it rather than failing.
+        printf '{"evidence":"a\007raw\nbell","matched":true,"confidence":1}\n'
+        exit 0
+        ;;
+    echo-payload)
+        # Echo the payload back as the evidence, so a test can assert on what
+        # actually reached the model after sanitisation.
+        printf '{"evidence":"%s","matched":true,"confidence":1}\n' \
+            "$(printf '%s' "$payload" | tr -d '\n\r"\\')"
         exit 0
         ;;
     hang)

@@ -103,7 +103,19 @@ The model's JSON is written to standard output unchanged.
 .Ar instruction
 describes what to extract.
 .It Fl -json
-Write a machine-readable result to standard output.
+Write a machine-readable result to standard output, as a single JSON object:
+.Bl -tag -width indent
+.It Va matched
+The decision.
+It always agrees with the exit status.
+.It Va confidence
+The model's self-reported certainty, from 0.0 to 1.0.
+This is a self-report and not a calibrated probability; see
+.Sx CONFIDENCE .
+.It Va evidence
+The text the model quoted to justify its answer.
+Informational only; it must never be treated as authoritative by a program.
+.El
 .It Fl -explain
 Print the model's reasoning.
 Informational only; it must never be treated as authoritative by a program.

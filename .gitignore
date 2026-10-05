@@ -1,13 +1,8 @@
-# fmevent is a single POSIX shell script with no build step, so there is very
-# little to ignore. These are the leftovers that would otherwise creep in.
-
 .DS_Store
 *.swp
 *~
 
-# Editor/agent scratch, not part of the tool.
 .claude/
 
-# Scratch space used while developing against the model.
 /tmp/
 *.log

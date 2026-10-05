@@ -19,7 +19,7 @@
 
 set -u
 
-VERSION='1.0.0'
+VERSION='1.0.1'
 PROG=${0##*/}
 
 FM=${FMEVENT_FM:-/usr/bin/fm}
@@ -693,10 +693,6 @@ grade_predicate() {
     esac
 }
 
-json_escape() {
-    printf '%s' "$1" | "$JQ" -R -s -r '.'
-}
-
 emit_json() {
     printf '%s\n' "$1"
 }
@@ -1124,9 +1120,9 @@ main() {
     make_tmpd
 
     case "$MODE" in
-        route)  require_jq; run_route ;;
-        schema) require_jq; run_schema ;;
-        *)      require_jq; run_predicate ;;
+        route)  require_jq; require_fm; run_route ;;
+        schema) require_jq; require_fm; run_schema ;;
+        *)      require_jq; require_fm; run_predicate ;;
     esac
 }
 

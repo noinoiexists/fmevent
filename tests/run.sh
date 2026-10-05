@@ -125,6 +125,9 @@ FAKE_FM_MODE=ok FAKE_FM_MATCHED=true  t_out '--version prints version'    '1.0.0
 section 'fm failures'
 
 FAKE_FM_MODE=malformed   t_exit 'malformed output yields 2'        2 'log' 'p'
+# Constrained decoding guarantees shape, not legal JSON: a control character
+# quoted out of the input makes the document unparseable unless repaired.
+FAKE_FM_MODE=ctrljson    t_exit 'literal control chars in JSON are repaired' 0 'log' 'p'
 FAKE_FM_MODE=nofields    t_exit 'missing fields yields 2'          2 'log' 'p'
 FAKE_FM_MODE=license     t_exit 'licence refusal yields 2'         2 'log' 'p'
 FAKE_FM_MODE=license     t_err  'licence refusal is explained'     'sudo fm license' 'log' 'p'
@@ -153,6 +156,16 @@ section 'input handling'
 FAKE_FM_MODE=ok FAKE_FM_MATCHED=true t_err 'oversized input is elided' 'elided the middle' \
     "$(awk 'BEGIN{for(i=0;i<4000;i++)print "a line of log output padded out"}')" --max-input 500 'p'
 
+# ANSI escapes and control characters are stripped before the model ever sees
+# them, so they can never come back inside its JSON or reach the terminal.
+_esc=$(printf '\033')
+FAKE_FM_MODE=echo-payload run "$(printf 'plain \033[31mred\033[0m text\007')" --explain 'p'
+if grep -q "$_esc" "$TMPD/out"; then
+    bad 'ANSI escapes never reach the model' 'an escape survived into the output'
+else
+    ok 'ANSI escapes never reach the model'
+fi
+
 printf 'a file with spaces\n' > "$TMPD/my log file.txt"
 FAKE_FM_MODE=ok FAKE_FM_MATCHED=true t_exit 'file with spaces is read' 0 '' 'p' "$TMPD/my log file.txt"
 FAKE_FM_MODE=ok FAKE_FM_MATCHED=true t_exit 'missing file yields 2'    2 '' 'p' "$TMPD/does-not-exist.txt"
@@ -173,6 +186,18 @@ FAKE_FM_MODE=ok FAKE_FM_MATCHES='"made-up-route"' \
     t_out  'hallucinated route name is dropped' 'RAN-fallback' 'text' --route "$TMPD/routes.json"
 FAKE_FM_MODE=ok FAKE_FM_MATCHES='"made-up-route"' \
     t_exit 'hallucinated name alone yields 1 with no fallback' 1 'text' --route "$TMPD/nofallback.json"
+
+# A routes file names its handlers relative to itself, so it keeps working when
+# invoked from an unrelated working directory.
+mkdir -p "$TMPD/sub"
+printf '#!/bin/sh\necho RAN-relative\n' > "$TMPD/sub/helper.sh"
+chmod +x "$TMPD/sub/helper.sh"
+cat > "$TMPD/sub/routes.json" <<'EOF'
+{ "route": [ { "name": "a", "when": "thing a", "run": ["./helper.sh"] } ] }
+EOF
+FAKE_FM_MODE=ok FAKE_FM_MATCHES='"a"' \
+    t_out 'relative run resolves against the routes file' 'RAN-relative' \
+    'text' --route "$TMPD/sub/routes.json"
 
 FAKE_FM_MODE=ok FAKE_FM_MATCHES='' \
     t_out  'no matches uses the fallback' 'RAN-fallback' 'text' --route "$TMPD/routes.json"

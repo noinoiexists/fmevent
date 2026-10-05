@@ -25,9 +25,9 @@ DIFF='diff --git a/auth.go b/auth.go
 step 'Give the model a shape to fill in'
 note 'The schema file is ordinary JSON Schema with one Apple extension: x-order,'
 note 'which fixes the order the model writes the fields in.'
-show 'fmevent --schema change.json "analyse whether this changes security-sensitive behaviour"'
+show 'fmevent --schema change.json --greedy "analyse whether this changes security-sensitive behaviour"'
 printf '%s' "$DIFF" \
-    | "$FMEVENT" --schema change.json \
+    | "$FMEVENT" --schema change.json --greedy \
         "analyse whether this changes security-sensitive behaviour" | jq .
 
 # ---------------------------------------------------------------------------
@@ -35,9 +35,9 @@ printf '%s' "$DIFF" \
 step 'The point: the output is a value, not prose'
 note 'Because it is JSON on stdout, the decision stays in your hands. Here jq'
 note 'gates on the extracted fields, with no model involved in the comparison.'
-show 'fmevent --schema change.json "..." | jq -e ".security_sensitive"'
+show 'fmevent --schema change.json --greedy "..." | jq -e ".security_sensitive"'
 if printf '%s' "$DIFF" \
-    | "$FMEVENT" --schema change.json \
+    | "$FMEVENT" --schema change.json --greedy \
         "analyse whether this changes security-sensitive behaviour" \
     | jq -e '.security_sensitive' >/dev/null; then
     printf '  -> flagged for security review\n'
@@ -49,16 +49,16 @@ fi
 
 step 'A second shape, over a log rather than a diff'
 note 'findings.json asks for a list rather than a single verdict.'
-show 'fmevent --schema findings.json "summarise what went wrong"'
+show 'fmevent --schema findings.json --greedy "summarise what went wrong"'
 printf 'warning: retrying request after timeout (attempt 2 of 3)\nERROR: could not connect to postgres at db:5432\nERROR: migration 0042 failed, aborting\n' \
-    | "$FMEVENT" --schema findings.json "summarise what went wrong and say whether it blocks a release" | jq .
+    | "$FMEVENT" --schema findings.json --greedy "summarise what went wrong and say whether it blocks a release" | jq .
 
 # ---------------------------------------------------------------------------
 
 step 'Chaining: feed the structure straight into other tools'
-show 'fmevent --schema findings.json "..." | jq -r .findings[]'
+show 'fmevent --schema findings.json --greedy "..." | jq -r .findings[]'
 printf 'warning: retrying request after timeout (attempt 2 of 3)\nERROR: could not connect to postgres at db:5432\nERROR: migration 0042 failed, aborting\n' \
-    | "$FMEVENT" --schema findings.json "summarise what went wrong and say whether it blocks a release" \
+    | "$FMEVENT" --schema findings.json --greedy "summarise what went wrong and say whether it blocks a release" \
     | jq -r '.findings[]' \
     | while IFS= read -r line; do
         printf '  [ ] %s\n' "$line"
